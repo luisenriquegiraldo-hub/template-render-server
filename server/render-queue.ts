@@ -6,8 +6,22 @@ import {
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 
+interface SceneInput {
+  imageUrl: string;
+  durationSeg: number;
+}
+
+interface CaptionInput {
+  text: string;
+  start: number;
+  end: number;
+}
+
 interface JobData {
-  titleText: string;
+  scenes: SceneInput[];
+  voiceUrl: string;
+  musicUrl: string;
+  captions: CaptionInput[];
 }
 
 type JobState =
@@ -29,20 +43,22 @@ type JobState =
     }
   | {
       status: "failed";
-      error: Error;
+      message: string;
       data: JobData;
     };
 
-const compositionId = "HelloWorld";
+const compositionId = "FabricaVideo";
 
 export const makeRenderQueue = ({
   port,
   serveUrl,
   rendersDir,
+  publicBaseUrl,
 }: {
   port: number;
   serveUrl: string;
   rendersDir: string;
+  publicBaseUrl: string;
 }) => {
   const jobs = new Map<string, JobState>();
   let queue: Promise<unknown> = Promise.resolve();
@@ -56,15 +72,18 @@ export const makeRenderQueue = ({
     const { cancel, cancelSignal } = makeCancelSignal();
 
     jobs.set(jobId, {
-      progress: 0,
       status: "in-progress",
-      cancel: cancel,
+      progress: 0,
+      cancel,
       data: job.data,
     });
 
     try {
       const inputProps = {
-        titleText: job.data.titleText,
+        scenes: job.data.scenes,
+        voiceUrl: job.data.voiceUrl,
+        musicUrl: job.data.musicUrl,
+        captions: job.data.captions,
       };
 
       const composition = await selectComposition({
@@ -82,9 +101,9 @@ export const makeRenderQueue = ({
         onProgress: (progress) => {
           console.info(`${jobId} render progress:`, progress.progress);
           jobs.set(jobId, {
-            progress: progress.progress,
             status: "in-progress",
-            cancel: cancel,
+            progress: progress.progress,
+            cancel,
             data: job.data,
           });
         },
@@ -93,14 +112,14 @@ export const makeRenderQueue = ({
 
       jobs.set(jobId, {
         status: "completed",
-        videoUrl: `http://localhost:${port}/renders/${jobId}.mp4`,
+        videoUrl: `${publicBaseUrl}/renders/${jobId}.mp4`,
         data: job.data,
       });
     } catch (error) {
       console.error(error);
       jobs.set(jobId, {
         status: "failed",
-        error: error as Error,
+        message: error instanceof Error ? error.message : String(error),
         data: job.data,
       });
     }
