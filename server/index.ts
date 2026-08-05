@@ -3,10 +3,37 @@ import { makeRenderQueue } from "./render-queue";
 import { bundle } from "@remotion/bundler";
 import path from "node:path";
 import { ensureBrowser } from "@remotion/renderer";
+import { z } from "zod";
 
-const { PORT = 3000, REMOTION_SERVE_URL } = process.env;
+const { PORT = 3000, REMOTION_SERVE_URL, PUBLIC_BASE_URL } = process.env;
 
-function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
+const renderRequestSchema = z.object({
+  scenes: z
+    .array(
+      z.object({
+        imageUrl: z.string(),
+        durationSeg: z.number(),
+      }),
+    )
+    .min(1),
+  voiceUrl: z.string(),
+  musicUrl: z.string(),
+  captions: z.array(
+    z.object({
+      text: z.string(),
+      start: z.number(),
+      end: z.number(),
+    }),
+  ),
+});
+
+function setupApp({
+  remotionBundleUrl,
+  publicBaseUrl,
+}: {
+  remotionBundleUrl: string;
+  publicBaseUrl: string;
+}) {
   const app = express();
 
   const rendersDir = path.resolve("renders");
@@ -15,22 +42,26 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
     port: Number(PORT),
     serveUrl: remotionBundleUrl,
     rendersDir,
+    publicBaseUrl,
   });
 
   // Host renders on /renders
   app.use("/renders", express.static(rendersDir));
-  app.use(express.json());
+  app.use(express.json({ limit: "2mb" }));
 
   // Endpoint to create a new job
   app.post("/renders", async (req, res) => {
-    const titleText = req.body?.titleText || "Hello, world!";
+    const parsed = renderRequestSchema.safeParse(req.body);
 
-    if (typeof titleText !== "string") {
-      res.status(400).json({ message: "titleText must be a string" });
+    if (!parsed.success) {
+      res.status(400).json({
+        message: "Invalid render payload",
+        issues: parsed.error.issues,
+      });
       return;
     }
 
-    const jobId = queue.createJob({ titleText });
+    const jobId = queue.createJob(parsed.data);
 
     res.json({ jobId });
   });
@@ -39,6 +70,11 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
   app.get("/renders/:jobId", (req, res) => {
     const jobId = req.params.jobId;
     const job = queue.jobs.get(jobId);
+
+    if (!job) {
+      res.status(404).json({ message: "Job not found" });
+      return;
+    }
 
     res.json(job);
   });
@@ -70,6 +106,12 @@ function setupApp({ remotionBundleUrl }: { remotionBundleUrl: string }) {
 async function main() {
   await ensureBrowser();
 
+  if (!PUBLIC_BASE_URL) {
+    throw new Error(
+      "PUBLIC_BASE_URL env var is required (public URL of this server, e.g. https://fabrica-remotion.1v3vdd.easypanel.host) — n8n needs a reachable videoUrl, not localhost.",
+    );
+  }
+
   const remotionBundleUrl = REMOTION_SERVE_URL
     ? REMOTION_SERVE_URL
     : await bundle({
@@ -79,7 +121,7 @@ async function main() {
         },
       });
 
-  const app = setupApp({ remotionBundleUrl });
+  const app = setupApp({ remotionBundleUrl, publicBaseUrl: PUBLIC_BASE_URL });
 
   app.listen(PORT, () => {
     console.info(`Server is running on port ${PORT}`);
