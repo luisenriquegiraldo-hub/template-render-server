@@ -3,6 +3,7 @@ import {
   AbsoluteFill,
   Audio,
   Img,
+  OffthreadVideo,
   Sequence,
   interpolate,
   useCurrentFrame,
@@ -28,17 +29,26 @@ export const fabricaVideoSchema = z.object({
       end: z.number(),
     }),
   ),
+  // Clip personal opcional (cierre con la cara real de Luis). Vacio = no hay.
+  outroVideoUrl: z.string().default(""),
 });
 
-type FabricaVideoProps = z.infer<typeof fabricaVideoSchema>;
+type FabricaVideoSchemaProps = z.infer<typeof fabricaVideoSchema>;
+
+// outroDurationInFrames no lo manda n8n -- lo calcula calculateMetadata en
+// Root.tsx (midiendo el archivo real de outroVideoUrl) y se lo inyecta al
+// componente como prop derivada, para no medir el archivo dos veces.
+type FabricaVideoProps = FabricaVideoSchemaProps & {
+  outroDurationInFrames?: number;
+};
 
 // El guion estima segundos por escena, pero eso no garantiza que coincida con
 // lo que tarda ElevenLabs en narrar el texto real. La duracion del video debe
 // seguir el audio real (medido por Whisper via el ultimo caption), nunca ser
 // mas corta que la narracion o el CTA final queda cortado.
 export const computeTotalDurationSeg = (
-  scenes: FabricaVideoProps["scenes"],
-  captions: FabricaVideoProps["captions"],
+  scenes: FabricaVideoSchemaProps["scenes"],
+  captions: FabricaVideoSchemaProps["captions"],
 ): number => {
   const scenesSum = scenes.reduce((sum, scene) => sum + scene.durationSeg, 0);
   const captionsEnd = captions.reduce(
@@ -102,17 +112,23 @@ export const FabricaVideo: React.FC<FabricaVideoProps> = ({
   voiceUrl,
   musicUrl,
   captions,
+  outroVideoUrl,
+  outroDurationInFrames = 0,
 }) => {
-  const { fps, durationInFrames: totalDurationInFrames } = useVideoConfig();
+  const { fps } = useVideoConfig();
 
-  // La ultima escena se extiende para cubrir cualquier segundo de narracion
-  // que sobre despues de sumar las duraciones estimadas del guion, para que
-  // el CTA final nunca se corte antes de que termine el audio.
+  // Duracion de la parte generada por IA (escenas + narracion), sin contar
+  // el outro personal -- calculada aqui de forma independiente en vez de leer
+  // useVideoConfig().durationInFrames, porque ese total ya incluye el outro
+  // cuando existe, y contaminaria el calculo de "cuanto hay que estirar la
+  // ultima escena para cubrir la narracion".
   const scenesSumFrames = scenes.reduce(
     (sum, scene) => sum + Math.max(1, Math.round(scene.durationSeg * fps)),
     0,
   );
-  const extraFrames = Math.max(0, totalDurationInFrames - scenesSumFrames);
+  const totalAiSeg = computeTotalDurationSeg(scenes, captions);
+  const totalAiFrames = Math.max(1, Math.round(totalAiSeg * fps));
+  const extraFrames = Math.max(0, totalAiFrames - scenesSumFrames);
 
   let elapsedFrames = 0;
   const sceneSequences = scenes.map((scene, index) => {
@@ -129,6 +145,8 @@ export const FabricaVideo: React.FC<FabricaVideoProps> = ({
       </Sequence>
     );
   });
+
+  const hasOutro = Boolean(outroVideoUrl) && outroDurationInFrames > 0;
 
   return (
     <AbsoluteFill style={{ backgroundColor: "#000000" }}>
@@ -148,8 +166,32 @@ export const FabricaVideo: React.FC<FabricaVideoProps> = ({
         );
       })}
 
-      {voiceUrl ? <Audio src={voiceUrl} /> : null}
-      {musicUrl ? <Audio src={musicUrl} volume={0.12} loop /> : null}
+      {/* Voz y musica solo suenan durante la parte generada por IA -- se
+          cortan justo cuando entra el clip personal, para que la voz real
+          de Luis se escuche limpia sin competir con la musica de fondo. */}
+      {voiceUrl ? (
+        <Sequence from={0} durationInFrames={totalAiFrames}>
+          <Audio src={voiceUrl} />
+        </Sequence>
+      ) : null}
+      {musicUrl ? (
+        <Sequence from={0} durationInFrames={totalAiFrames}>
+          <Audio src={musicUrl} volume={0.12} loop />
+        </Sequence>
+      ) : null}
+
+      {/* Cierre personal: corte directo justo al terminar la ultima escena,
+          sin transicion. Trae su propio audio (la voz real de Luis). */}
+      {hasOutro ? (
+        <Sequence from={totalAiFrames} durationInFrames={outroDurationInFrames}>
+          <AbsoluteFill style={{ backgroundColor: "#000000" }}>
+            <OffthreadVideo
+              src={outroVideoUrl}
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          </AbsoluteFill>
+        </Sequence>
+      ) : null}
     </AbsoluteFill>
   );
 };
