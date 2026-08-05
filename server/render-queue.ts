@@ -22,6 +22,7 @@ interface JobData {
   voiceUrl: string;
   musicUrl: string;
   captions: CaptionInput[];
+  outroVideoUrl: string;
 }
 
 type JobState =
@@ -84,6 +85,7 @@ export const makeRenderQueue = ({
         voiceUrl: job.data.voiceUrl,
         musicUrl: job.data.musicUrl,
         captions: job.data.captions,
+        outroVideoUrl: job.data.outroVideoUrl,
       };
 
       const composition = await selectComposition({
