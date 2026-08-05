@@ -32,6 +32,23 @@ export const fabricaVideoSchema = z.object({
 
 type FabricaVideoProps = z.infer<typeof fabricaVideoSchema>;
 
+// El guion estima segundos por escena, pero eso no garantiza que coincida con
+// lo que tarda ElevenLabs en narrar el texto real. La duracion del video debe
+// seguir el audio real (medido por Whisper via el ultimo caption), nunca ser
+// mas corta que la narracion o el CTA final queda cortado.
+export const computeTotalDurationSeg = (
+  scenes: FabricaVideoProps["scenes"],
+  captions: FabricaVideoProps["captions"],
+): number => {
+  const scenesSum = scenes.reduce((sum, scene) => sum + scene.durationSeg, 0);
+  const captionsEnd = captions.reduce(
+    (max, caption) => Math.max(max, caption.end),
+    0,
+  );
+
+  return Math.max(scenesSum, captionsEnd);
+};
+
 const Scene: React.FC<{ imageUrl: string; durationInFrames: number }> = ({
   imageUrl,
   durationInFrames,
@@ -86,11 +103,23 @@ export const FabricaVideo: React.FC<FabricaVideoProps> = ({
   musicUrl,
   captions,
 }) => {
-  const { fps } = useVideoConfig();
+  const { fps, durationInFrames: totalDurationInFrames } = useVideoConfig();
+
+  // La ultima escena se extiende para cubrir cualquier segundo de narracion
+  // que sobre despues de sumar las duraciones estimadas del guion, para que
+  // el CTA final nunca se corte antes de que termine el audio.
+  const scenesSumFrames = scenes.reduce(
+    (sum, scene) => sum + Math.max(1, Math.round(scene.durationSeg * fps)),
+    0,
+  );
+  const extraFrames = Math.max(0, totalDurationInFrames - scenesSumFrames);
 
   let elapsedFrames = 0;
   const sceneSequences = scenes.map((scene, index) => {
-    const durationInFrames = Math.max(1, Math.round(scene.durationSeg * fps));
+    const isLast = index === scenes.length - 1;
+    const durationInFrames =
+      Math.max(1, Math.round(scene.durationSeg * fps)) +
+      (isLast ? extraFrames : 0);
     const from = elapsedFrames;
     elapsedFrames += durationInFrames;
 
