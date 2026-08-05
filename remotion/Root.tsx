@@ -1,5 +1,10 @@
 import { Composition } from "remotion";
-import { FabricaVideo, fabricaVideoSchema, FPS } from "./FabricaVideo";
+import {
+  FabricaVideo,
+  computeTotalDurationSeg,
+  fabricaVideoSchema,
+  FPS,
+} from "./FabricaVideo";
 
 export const RemotionRoot: React.FC = () => {
   return (
@@ -27,9 +32,9 @@ export const RemotionRoot: React.FC = () => {
           captions: [],
         }}
         calculateMetadata={async ({ props }) => {
-          const totalSeg = props.scenes.reduce(
-            (sum, scene) => sum + scene.durationSeg,
-            0,
+          const totalSeg = computeTotalDurationSeg(
+            props.scenes,
+            props.captions,
           );
 
           return {
