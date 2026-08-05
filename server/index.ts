@@ -25,6 +25,7 @@ const renderRequestSchema = z.object({
       end: z.number(),
     }),
   ),
+  outroVideoUrl: z.string().default(""),
 });
 
 function setupApp({
