@@ -1,4 +1,5 @@
 import { Composition } from "remotion";
+import { getVideoMetadata } from "@remotion/media-utils";
 import {
   FabricaVideo,
   computeTotalDurationSeg,
@@ -16,7 +17,8 @@ export const RemotionRoot: React.FC = () => {
         width={1080}
         height={1920}
         // durationInFrames es solo el valor por defecto en el Studio;
-        // calculateMetadata lo recalcula en cada render segun la suma de escenas.
+        // calculateMetadata lo recalcula en cada render segun la suma de escenas
+        // (y la duracion real del clip personal, si viene uno).
         durationInFrames={150}
         schema={fabricaVideoSchema}
         defaultProps={{
@@ -30,15 +32,30 @@ export const RemotionRoot: React.FC = () => {
           voiceUrl: "",
           musicUrl: "",
           captions: [],
+          outroVideoUrl: "",
         }}
         calculateMetadata={async ({ props }) => {
-          const totalSeg = computeTotalDurationSeg(
-            props.scenes,
-            props.captions,
-          );
+          const aiSeg = computeTotalDurationSeg(props.scenes, props.captions);
+          const aiFrames = Math.max(1, Math.round(aiSeg * FPS));
+
+          // Se mide el archivo real del clip personal (nunca se confia en un
+          // numero de duracion escrito a mano) -- si el clip cambia de 10s a
+          // 12s de un dia a otro, esto se ajusta solo, sin tocar nada mas.
+          let outroDurationInFrames = 0;
+          if (props.outroVideoUrl) {
+            const metadata = await getVideoMetadata(props.outroVideoUrl);
+            outroDurationInFrames = Math.max(
+              1,
+              Math.round(metadata.durationInSeconds * FPS),
+            );
+          }
 
           return {
-            durationInFrames: Math.max(1, Math.round(totalSeg * FPS)),
+            durationInFrames: aiFrames + outroDurationInFrames,
+            props: {
+              ...props,
+              outroDurationInFrames,
+            },
           };
         }}
       />
