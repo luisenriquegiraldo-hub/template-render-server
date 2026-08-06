@@ -120,22 +120,35 @@ export const FabricaVideo: React.FC<FabricaVideoProps> = ({
   // Duracion de la parte generada por IA (escenas + narracion), sin contar
   // el outro personal -- calculada aqui de forma independiente en vez de leer
   // useVideoConfig().durationInFrames, porque ese total ya incluye el outro
-  // cuando existe, y contaminaria el calculo de "cuanto hay que estirar la
-  // ultima escena para cubrir la narracion".
-  const scenesSumFrames = scenes.reduce(
-    (sum, scene) => sum + Math.max(1, Math.round(scene.durationSeg * fps)),
-    0,
-  );
+  // cuando existe.
+  const scenesSumSeg = scenes.reduce((sum, scene) => sum + scene.durationSeg, 0);
   const totalAiSeg = computeTotalDurationSeg(scenes, captions);
   const totalAiFrames = Math.max(1, Math.round(totalAiSeg * fps));
-  const extraFrames = Math.max(0, totalAiFrames - scenesSumFrames);
+
+  // Si la narracion real dura mas que la suma de escenas del guion, el tiempo
+  // extra se reparte PROPORCIONALMENTE entre todas las escenas (no solo la
+  // ultima) -- estirar solo la ultima escena la deja casi congelada cuando la
+  // diferencia es grande, porque el zoom sutil de Ken Burns se nota cada vez
+  // menos mientras mas se alarga una sola escena.
+  const stretchFactor = scenesSumSeg > 0 ? totalAiSeg / scenesSumSeg : 1;
+  const sceneDurationsInFrames = scenes.map((scene) =>
+    Math.max(1, Math.round(scene.durationSeg * stretchFactor * fps)),
+  );
+  // Corrige el redondeo (siempre menos de un frame por escena, nunca notable)
+  // para que la suma coincida exactamente con la duracion real del audio.
+  const roundingDiff =
+    totalAiFrames - sceneDurationsInFrames.reduce((sum, d) => sum + d, 0);
+  if (sceneDurationsInFrames.length > 0) {
+    const lastIndex = sceneDurationsInFrames.length - 1;
+    sceneDurationsInFrames[lastIndex] = Math.max(
+      1,
+      sceneDurationsInFrames[lastIndex] + roundingDiff,
+    );
+  }
 
   let elapsedFrames = 0;
   const sceneSequences = scenes.map((scene, index) => {
-    const isLast = index === scenes.length - 1;
-    const durationInFrames =
-      Math.max(1, Math.round(scene.durationSeg * fps)) +
-      (isLast ? extraFrames : 0);
+    const durationInFrames = sceneDurationsInFrames[index];
     const from = elapsedFrames;
     elapsedFrames += durationInFrames;
 
