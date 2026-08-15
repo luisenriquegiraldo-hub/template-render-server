@@ -6,6 +6,7 @@ import {
   fabricaVideoSchema,
   FPS,
 } from "./FabricaVideo";
+import { CarouselSlide, carouselSlideSchema } from "./CarouselSlide";
 
 export const RemotionRoot: React.FC = () => {
   return (
@@ -57,6 +58,32 @@ export const RemotionRoot: React.FC = () => {
               outroDurationInFrames,
             },
           };
+        }}
+      />
+
+      {/* Diapositiva individual del carrusel de LinkedIn (1080x1080).
+          Se renderiza con renderStill (una imagen fija, no un video) --
+          carousel-queue.ts la llama una vez por slide y junta los PNG
+          resultantes en un solo PDF. */}
+      <Composition
+        id="CarouselSlide"
+        component={CarouselSlide}
+        fps={FPS}
+        width={1080}
+        height={1080}
+        durationInFrames={1}
+        schema={carouselSlideSchema}
+        defaultProps={{
+          role: "contenido",
+          eyebrow: "AUTOMATIZACIÓN CON IA",
+          hook: "",
+          titulo: "Ejemplo de titulo",
+          texto: "Ejemplo de texto de contenido para la diapositiva.",
+          ctaText: "",
+          photoUrl: "",
+          backgroundUrl:
+            "https://placehold.co/1080x1080/0A0D10/19C9C0?text=Fondo",
+          logoUrl: "https://placehold.co/200x200/0A0D10/19C9C0?text=D",
         }}
       />
     </>

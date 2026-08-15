@@ -1,5 +1,7 @@
 import express from "express";
+import fs from "node:fs";
 import { makeRenderQueue } from "./render-queue";
+import { makeCarouselQueue } from "./carousel-queue";
 import { bundle } from "@remotion/bundler";
 import path from "node:path";
 import { ensureBrowser } from "@remotion/renderer";
@@ -28,6 +30,24 @@ const renderRequestSchema = z.object({
   outroVideoUrl: z.string().default(""),
 });
 
+const carouselRequestSchema = z.object({
+  slides: z
+    .array(
+      z.object({
+        role: z.enum(["portada", "contenido", "cierre"]),
+        eyebrow: z.string().optional(),
+        hook: z.string().optional(),
+        titulo: z.string().optional(),
+        texto: z.string().optional(),
+        ctaText: z.string().optional(),
+        photoUrl: z.string().optional(),
+      }),
+    )
+    .min(1),
+  backgroundUrl: z.string(),
+  logoUrl: z.string(),
+});
+
 function setupApp({
   remotionBundleUrl,
   publicBaseUrl,
@@ -38,6 +58,8 @@ function setupApp({
   const app = express();
 
   const rendersDir = path.resolve("renders");
+  const carouselsDir = path.resolve("carousels");
+  fs.mkdirSync(carouselsDir, { recursive: true });
 
   const queue = makeRenderQueue({
     port: Number(PORT),
@@ -46,8 +68,16 @@ function setupApp({
     publicBaseUrl,
   });
 
+  const carouselQueue = makeCarouselQueue({
+    serveUrl: remotionBundleUrl,
+    carouselsDir,
+    publicBaseUrl,
+  });
+
   // Host renders on /renders
   app.use("/renders", express.static(rendersDir));
+  // Host carousel PDFs on /carousels
+  app.use("/carousels", express.static(carouselsDir));
   app.use(express.json({ limit: "2mb" }));
 
   // Endpoint to create a new job
@@ -99,6 +129,36 @@ function setupApp({
     job.cancel();
 
     res.json({ message: "Job cancelled" });
+  });
+
+  // Endpoint to create a new carousel job (PDF de diapositivas para LinkedIn)
+  app.post("/carousel", async (req, res) => {
+    const parsed = carouselRequestSchema.safeParse(req.body);
+
+    if (!parsed.success) {
+      res.status(400).json({
+        message: "Invalid carousel payload",
+        issues: parsed.error.issues,
+      });
+      return;
+    }
+
+    const jobId = carouselQueue.createJob(parsed.data);
+
+    res.json({ jobId });
+  });
+
+  // Endpoint to get a carousel job status
+  app.get("/carousel/:jobId", (req, res) => {
+    const jobId = req.params.jobId;
+    const job = carouselQueue.jobs.get(jobId);
+
+    if (!job) {
+      res.status(404).json({ message: "Job not found" });
+      return;
+    }
+
+    res.json(job);
   });
 
   return app;
