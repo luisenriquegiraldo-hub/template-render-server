@@ -62,9 +62,10 @@ export const CarouselSlide: React.FC<CarouselSlideProps> = ({
           position: "absolute",
           top: 64,
           left: 64,
-          width: 96,
-          height: 96,
+          width: 220,
+          height: 220,
           objectFit: "contain",
+          objectPosition: "left top",
         }}
       />
 
