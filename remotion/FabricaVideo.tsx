@@ -189,7 +189,7 @@ export const FabricaVideo: React.FC<FabricaVideoProps> = ({
       ) : null}
       {musicUrl ? (
         <Sequence from={0} durationInFrames={totalAiFrames}>
-          <Audio src={musicUrl} volume={0.12} loop />
+          <Audio src={musicUrl} volume={0.06} loop />
         </Sequence>
       ) : null}
 
