@@ -89,7 +89,7 @@ const Caption: React.FC<{ text: string }> = ({ text }) => (
   <AbsoluteFill style={{ justifyContent: "flex-end", alignItems: "center" }}>
     <div
       style={{
-        marginBottom: 180,
+        marginBottom: 320,
         maxWidth: "85%",
         padding: "16px 28px",
         borderRadius: 12,
