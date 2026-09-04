@@ -150,7 +150,7 @@ const Watermark: React.FC = () => (
           color: "#ffffff",
         }}
       >
-        @digitrionai
+        digitrion.com
       </span>
     </div>
   </AbsoluteFill>
