@@ -107,6 +107,55 @@ const Caption: React.FC<{ text: string }> = ({ text }) => (
   </AbsoluteFill>
 );
 
+// Watermark de marca, visible todo el video (escenas + outro personal si lo
+// hay). Sin dependencia de ningun asset externo -- el badge se dibuja en
+// codigo con los colores reales del sitio (celeste/turquesa), para no
+// depender de la URL del logo real en Supabase.
+const Watermark: React.FC = () => (
+  <AbsoluteFill style={{ justifyContent: "flex-start", alignItems: "flex-start" }}>
+    <div
+      style={{
+        marginTop: 56,
+        marginLeft: 40,
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        padding: "8px 18px 8px 8px",
+        borderRadius: 999,
+        backgroundColor: "rgba(10, 13, 16, 0.55)",
+      }}
+    >
+      <div
+        style={{
+          width: 30,
+          height: 30,
+          borderRadius: "50%",
+          background: "linear-gradient(135deg, #0AB8E8, #19C9C0)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontFamily: "Arial, Helvetica, sans-serif",
+          fontWeight: 800,
+          fontSize: 18,
+          color: "#ffffff",
+        }}
+      >
+        D
+      </div>
+      <span
+        style={{
+          fontFamily: "Arial, Helvetica, sans-serif",
+          fontWeight: 700,
+          fontSize: 24,
+          color: "#ffffff",
+        }}
+      >
+        @digitrionai
+      </span>
+    </div>
+  </AbsoluteFill>
+);
+
 export const FabricaVideo: React.FC<FabricaVideoProps> = ({
   scenes,
   voiceUrl,
@@ -205,6 +254,8 @@ export const FabricaVideo: React.FC<FabricaVideoProps> = ({
           </AbsoluteFill>
         </Sequence>
       ) : null}
+
+      <Watermark />
     </AbsoluteFill>
   );
 };
